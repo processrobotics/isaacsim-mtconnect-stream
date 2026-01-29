@@ -64,7 +64,7 @@ class MTConnectDeviceMonitor:
             # Initialize the extension by calling on_startup
             ext.on_startup("isaacsim.mtconnect.stream_python")
             
-            self.mtconnect_client = ext.ui_builder.mtconnect_client
+            self.mtconnect_client = ext.mtconnect_client
             print(f"MTConnect client obtained. Streaming: {self.mtconnect_client.is_streaming}")
             return True
         except Exception as e:
