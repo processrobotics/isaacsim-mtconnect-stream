@@ -1,28 +1,30 @@
+# Extension configuration file.
+# Visit the "Extension configuration file (extension.toml)" section for more details:
+# https://docs.omniverse.nvidia.com/kit/docs/kit-manual/latest/guide/extensions_advanced.html
+#
+
+[core]
+reloadable = true
+order = 0
+
 [package]
-version = "1.0.1"
-category = "Simulation"
+version = "0.1.0"
+category = "simulation"
 title = "MTConnect Stream"
-description = "Stream MTConnect data from an MTConnect Agent"
-authors = ["Proces Robotics"]
-repository = ""
-keywords = ["mtconnect", "streaming", "manufacturing"]
+description = "Streams data from an MTConnect Agent"
 changelog = "docs/CHANGELOG.md"
 readme = "docs/README.md"
 preview_image = "data/preview.png"
 icon = "data/icon.png"
-writeTarget.kit = true
 
 [dependencies]
-"isaacsim.gui.components" = {}
-"omni.kit.uiapp" = {}
+"omni.graph" = {}
+"omni.graph.tools" = {}
 
+# define the Python module that the extension provides
 [[python.module]]
-name = "isaacsim_mtconnect_stream_python"
+name = "isaacsim.mtconnect.stream2"
 
-[[ogn]]
-path = "ogn"
+[settings]
+exts."isaacsim.mtconnect.stream2".timeout = 5
 
-# Watch the .ogn files for hot reloading (only works for Python files)
-[fswatcher.patterns]
-include = ["*.ogn", "*.py"]
-exclude = ["Ogn*Database.py"]

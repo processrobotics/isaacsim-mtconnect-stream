@@ -1,0 +1,34 @@
+{
+    "IsaacsimMtconnectStream2Py": {
+        "version": 1,
+        "language": "python",
+        "icon": "icons/icon.svg",
+        "uiName": "MTConnect Stream Node",
+        "description": [
+            "MTConnect stream connector",
+            "Allows connection of MTConnect DataItems from a stream to prims/attributes/xforms/etc"
+        ],
+        "categoryDefinitions": "config/CategoryDefinition.json",
+        "categories": ["extension:Category"],
+        "inputs": {
+            "dataItemIds": {
+                "type": "token[]",
+                "uiName": "DataItem IDs",
+                "description": "List of dataItem IDs to retrieve values for",
+                "default": []
+            }
+        },
+        "outputs": {
+            "values": {
+                "type": "double[]",
+                "uiName": "Values",
+                "description": "Values corresponding to the dataItem IDs"
+            },
+            "timestamps": {
+                "type": "token[]",
+                "uiName": "Timestamps",
+                "description": "Timestamps for the values"
+            }
+        }
+    }
+}

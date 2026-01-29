@@ -11,9 +11,10 @@ from isaacsim.gui.components.element_wrappers import ScrollingWindow
 from isaacsim.gui.components.menu import MenuItemDescription
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 
-from .global_variables import EXTENSION_TITLE, mtconnect_client
+from .global_variables import EXTENSION_TITLE
 from .ui_builder import UIBuilder
-from . import global_variables
+from .mtconnect_client import MTConnectClient
+
 
 
 class Extension(omni.ext.IExt):
@@ -42,7 +43,7 @@ class Extension(omni.ext.IExt):
 
         # UI Builder
         self.ui_builder = UIBuilder()
-        global_variables.mtconnect_client = self.ui_builder.mtconnect_client
+        self.mtconnect_client = self.ui_builder.mtconnect_client
 
     def on_shutdown(self):
         remove_menu_items(self._menu_items, EXTENSION_TITLE)
