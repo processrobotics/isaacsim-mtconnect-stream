@@ -147,24 +147,39 @@ The `MTConnectClient` class provides:
 5. **Caching**: In-memory storage indexed by `dataItemId`
 6. **Event System**: Callbacks for data updates, errors, and status changes
 
+### Extension Architecture
+
+The extension follows a singleton pattern where a single extension instance owns and manages the MTConnect client:
+
+1. **Extension Startup**: Creates MTConnect client and registers itself globally
+2. **Global Access**: `get_extension_instance()` provides access to the extension
+3. **Public API**: Extension exposes methods like `connect()`, `start_streaming()`, `stop_streaming()`
+4. **OmniGraph Integration**: Nodes access client through the extension instance
+5. **Extension Shutdown**: Cleans up client and clears global reference
+
+This design provides a single source of truth where the extension owns all state and exposes a clean public API for external access.
+
 ### OmniGraph Integration
 
-The OmniGraph node accesses the MTConnect client through a global registry:
+The OmniGraph node accesses the MTConnect client through the global extension instance:
 
-1. **Extension Startup**: Registers the MTConnect client instance in `global_variables`
-2. **OmniGraph Node**: Queries the registry to access the client and data cache
-3. **Extension Shutdown**: Clears the client reference
+1. **Extension Registration**: Extension registers itself globally in `extension.py`
+2. **Node Access**: OmniGraph node calls `get_extension_instance()` to get extension
+3. **Client Access**: Node accesses `extension.mtconnect_client` to query data
+4. **Data Retrieval**: Node queries client's data cache and returns values
 
-This design allows the OmniGraph node (which runs in a separate execution context) to access the same MTConnect client instance used by the extension UI.
+This design allows the OmniGraph node (which runs in a separate execution context) to access the same MTConnect client instance owned by the extension.
 
 ### Data Flow
 
 ```
 MTConnect Agent → HTTP Stream → MTConnect Client → Data Cache → UI/OmniGraph/Scripts
                                       ↓               ↑
-                                Global Registry   Callbacks
-                                      ↓
+                                   Extension      Callbacks
+                                (Global Instance)    ↓
+                                      ↓          UI Updates
                                 OmniGraph Node
+                              (get_extension_instance)
 ```
 
 ## Usage
@@ -190,14 +205,42 @@ The extension provides a docked window with three main sections:
 
 ### Programmatic Access
 
-#### Basic Connection
+#### Using the Extension API
+
+The recommended way to access MTConnect functionality is through the extension instance:
 
 ```python
-from isaacsim.mtconnect.stream2.impl.mtconnect_client import MTConnectClient
+from isaacsim.core.utils.extensions import enable_extension
+from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
 
-client = MTConnectClient()
+# Enable the extension first
+enable_extension("isaacsim.mtconnect.stream2")
 
-# Connect to agent
+# Get the extension instance
+extension = get_extension_instance()
+
+# Connect to agent using extension API
+if extension.connect("http://192.168.0.247:5000"):
+    extension.start_streaming()
+    print(f"Connected to: {extension.agent_address}")
+    print(f"Streaming: {extension.is_streaming}")
+    
+    # Access data cache
+    for data_item_id, obs in extension.data_cache.items():
+        print(f"{data_item_id}: {obs['value']}")
+```
+
+#### Direct Client Access (Advanced)
+
+You can also access the client directly for more control:
+
+```python
+from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+
+extension = get_extension_instance()
+client = extension.mtconnect_client
+
+# Direct client operations
 if client.connect("http://192.168.0.247:5000"):
     print("Connected successfully")
     print(client.get_data_summary())
@@ -206,6 +249,11 @@ if client.connect("http://192.168.0.247:5000"):
 #### Streaming with Callbacks
 
 ```python
+from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+
+extension = get_extension_instance()
+client = extension.mtconnect_client
+
 def on_data(data_cache):
     """Called when new data arrives"""
     for data_item_id, obs in data_cache.items():
@@ -225,17 +273,23 @@ client.set_callbacks(
     on_status_change=on_status
 )
 
-client.connect("http://192.168.0.247:5000")
-client.start_streaming()
+# Use extension API to connect and stream
+extension.connect("http://192.168.0.247:5000")
+extension.start_streaming()
 
 # Later...
-client.stop_streaming()
-client.disconnect()
+extension.stop_streaming()
+extension.disconnect()
 ```
 
 #### Querying Cached Data
 
 ```python
+from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+
+extension = get_extension_instance()
+client = extension.mtconnect_client
+
 # Get specific observation by dataItemId
 observation = client.get_observation("mxi_m001_avail")
 if observation:
@@ -248,8 +302,8 @@ temp_observations = client.get_observations_by_name("temperature")
 for obs in temp_observations:
     print(f"{obs['name']}: {obs['value']}")
 
-# Access entire cache
-for data_item_id, obs in client.data_cache.items():
+# Access entire cache via extension property
+for data_item_id, obs in extension.data_cache.items():
     print(f"{data_item_id}: {obs['value']} @ {obs['timestamp']}")
 ```
 
@@ -340,20 +394,25 @@ from isaacsim import SimulationApp
 simulation_app = SimulationApp({"headless": False})
 
 from isaacsim.core.api import World
-from isaacsim.mtconnect.stream2.impl.mtconnect_client import MTConnectClient
+from isaacsim.core.utils.extensions import enable_extension
+from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+
+# Enable the extension
+enable_extension("isaacsim.mtconnect.stream2")
 
 # Create world
 world = World()
 world.scene.add_default_ground_plane()
 
-# Setup MTConnect
-client = MTConnectClient()
-client.connect("http://192.168.0.247:5000")
-client.start_streaming()
+# Get extension and setup MTConnect
+extension = get_extension_instance()
+extension.connect("http://192.168.0.247:5000")
+extension.start_streaming()
 
 # Physics callback
 def physics_step(step_size):
-    # Get MTConnect data
+    # Get MTConnect data via extension
+    client = extension.mtconnect_client
     spindle_speed = client.get_observation("spindle_speed")
     if spindle_speed:
         speed_value = float(spindle_speed['value'])
@@ -368,17 +427,70 @@ while simulation_app.is_running():
     world.step(render=True)
 
 # Cleanup
-client.stop_streaming()
+extension.stop_streaming()
 simulation_app.close()
 ```
 
 ## API Reference
 
+### Extension API
+
+The extension provides a high-level API for MTConnect operations:
+
+#### `get_extension_instance() -> Extension`
+Get the global extension instance.
+
+```python
+from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+extension = get_extension_instance()
+```
+
+#### Extension Methods
+
+##### `connect(agent_address: str) -> bool`
+Connect to an MTConnect Agent.
+
+**Parameters**:
+- `agent_address`: URL of the MTConnect Agent (e.g., `"http://192.168.0.247:5000"`)
+
+**Returns**: `True` if successful, `False` otherwise
+
+##### `start_streaming() -> bool`
+Start streaming data from the connected agent.
+
+**Returns**: `True` if successful, `False` otherwise
+
+##### `stop_streaming()`
+Stop streaming data.
+
+##### `disconnect()`
+Disconnect from the agent and stop streaming.
+
+#### Extension Properties
+
+##### `is_streaming: bool`
+Whether currently streaming data.
+
+##### `is_connected: bool`
+Whether connected to an agent.
+
+##### `agent_address: str`
+The currently connected agent address.
+
+##### `data_cache: dict`
+The current data cache from the MTConnect stream.
+
+##### `mtconnect_client: MTConnectClient`
+Direct access to the underlying MTConnect client.
+
 ### MTConnectClient
+
+The client provides low-level MTConnect operations:
 
 #### Constructor
 ```python
-client = MTConnectClient()
+# Note: Usually accessed via extension.mtconnect_client
+client = extension.mtconnect_client
 ```
 
 #### Methods
