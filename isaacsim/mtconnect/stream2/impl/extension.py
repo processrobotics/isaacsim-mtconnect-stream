@@ -11,7 +11,7 @@ from isaacsim.gui.components.element_wrappers import ScrollingWindow
 from isaacsim.gui.components.menu import MenuItemDescription
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 
-from .global_variables import EXTENSION_TITLE
+from .global_variables import EXTENSION_TITLE, set_mtconnect_client, clear_mtconnect_client
 from .ui_builder import UIBuilder
 from .mtconnect_client import MTConnectClient
 
@@ -44,6 +44,9 @@ class Extension(omni.ext.IExt):
         # UI Builder
         self.ui_builder = UIBuilder()
         self.mtconnect_client = self.ui_builder.mtconnect_client
+        
+        # Register the MTConnect client for OmniGraph node access
+        set_mtconnect_client(self.mtconnect_client)
 
     def on_shutdown(self):
         remove_menu_items(self._menu_items, EXTENSION_TITLE)
@@ -53,6 +56,10 @@ class Extension(omni.ext.IExt):
 
         if self._window:
             self._window = None
+        
+        # Clear the global client reference
+        clear_mtconnect_client()
+        
         self.ui_builder.cleanup()
         gc.collect()
 
