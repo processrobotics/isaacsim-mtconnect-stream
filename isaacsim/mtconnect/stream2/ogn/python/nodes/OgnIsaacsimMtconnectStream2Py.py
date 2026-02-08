@@ -15,9 +15,12 @@ Collection of OmniGraph tutorials:
 import sys
 import os
 import traceback
-from typing import Tuple, Any
+from typing import Any
 
-# Add the impl directory to the path to access global_variables
+# Note: OmniGraph nodes may run in a context where the extension package path
+# is not automatically available. We add the impl path to allow import of 
+# global_variables. In production Isaac Sim environments, consider adding the
+# extension directory to PYTHONPATH instead.
 impl_path = os.path.join(os.path.dirname(__file__), "..", "..", "impl")
 if impl_path not in sys.path:
     sys.path.insert(0, impl_path)
@@ -107,7 +110,7 @@ class OgnIsaacsimMtconnectStream2Py:
             # Read input dataItemIds
             data_item_ids = db.inputs.dataItemIds
             
-            if not data_item_ids or len(data_item_ids) == 0:
+            if not data_item_ids:
                 # No input data items - return empty arrays
                 db.outputs.values = []
                 db.outputs.timestamps = []
