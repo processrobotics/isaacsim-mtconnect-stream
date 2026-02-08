@@ -18,14 +18,12 @@ import traceback
 from typing import Any
 
 # Note: OmniGraph nodes may run in a context where the extension package path
-# is not automatically available. We add the impl path to allow import of 
-# global_variables. In production Isaac Sim environments, consider adding the
-# extension directory to PYTHONPATH instead.
+# is not automatically available. We add the impl path to allow import.
 impl_path = os.path.join(os.path.dirname(__file__), "..", "..", "impl")
 if impl_path not in sys.path:
     sys.path.insert(0, impl_path)
 
-from global_variables import get_mtconnect_client
+from extension import get_extension_instance
 
 
 def convert_to_numeric(value: Any) -> float:
@@ -78,7 +76,7 @@ class OgnIsaacsimMtconnectStream2PyInternalState:
     def __init__(self):
         """Instantiate the per-node state information"""
         self.status = False
-        self.last_client = None
+        self.last_extension = None
 
 
 class OgnIsaacsimMtconnectStream2Py:
@@ -95,17 +93,20 @@ class OgnIsaacsimMtconnectStream2Py:
         state = db.internal_state
 
         try:
-            # Get the MTConnect client from the global registry
-            client = get_mtconnect_client()
+            # Get the extension instance
+            extension = get_extension_instance()
             
-            if client is None:
-                # No client available yet - return empty arrays
+            if extension is None:
+                # No extension available yet - return empty arrays
                 db.outputs.values = []
                 db.outputs.timestamps = []
                 return True
             
             # Store reference for debugging
-            state.last_client = client
+            state.last_extension = extension
+            
+            # Access the MTConnect client through the extension
+            client = extension.mtconnect_client
             
             # Read input dataItemIds
             data_item_ids = db.inputs.dataItemIds

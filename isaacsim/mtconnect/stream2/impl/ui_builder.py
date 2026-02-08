@@ -1,40 +1,48 @@
 # SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 import omni.ui as ui
 from isaacsim.gui.components.element_wrappers import CollapsableFrame, StateButton, TextBlock
 from isaacsim.gui.components.ui_utils import get_style
 
 from .global_variables import DEFAULT_AGENT_ADDRESS
-from .mtconnect_client import MTConnectClient, MTCONNECT_AVAILABLE
+from .mtconnect_client import MTCONNECT_AVAILABLE
+
+if TYPE_CHECKING:
+    from .extension import Extension
 
 
 class UIBuilder:
-    def __init__(self):
-        self._mtconnect_client = MTConnectClient()
+    def __init__(self, extension: "Extension"):
+        self._extension = extension
+        self._mtconnect_client = extension.mtconnect_client
         self._agent_address_model: ui.SimpleStringModel = None
         self._status_label: ui.Label = None
         self._data_label: ui.Label = None
         self._stream_btn: StateButton = None
         
-        # Set up callbacks
+        # Set up callbacks for UI updates
         self._mtconnect_client.set_callbacks(
             on_data_update=self._on_data_update,
             on_error=self._on_error,
             on_status_change=self._on_status_change
         )
 
-    @property
-    def mtconnect_client(self):
-        """Public accessor for the MTConnect client."""
-        return self._mtconnect_client
-
     def cleanup(self):
-        """Clean up resources when extension is closed."""
-        self._mtconnect_client.disconnect()
+        """Clean up resources when extension window is closed."""
+        # Don't disconnect - just cleanup UI references
+        # The extension owns the client lifecycle
+        pass
 
     def build_ui(self):
         """Build the MTConnect streaming UI."""
+        
+        # Get current state from client
+        current_address = self._mtconnect_client.agent_address or DEFAULT_AGENT_ADDRESS
+        is_streaming = self._mtconnect_client.is_streaming
         
         # Connection Settings Frame
         connection_frame = CollapsableFrame("Connection Settings", collapsed=False)
@@ -43,7 +51,7 @@ class UIBuilder:
                 # Agent Address Input
                 with ui.HStack(height=0, spacing=5):
                     ui.Label("Agent Address:", width=100)
-                    self._agent_address_model = ui.SimpleStringModel(DEFAULT_AGENT_ADDRESS)
+                    self._agent_address_model = ui.SimpleStringModel(current_address)
                     ui.StringField(model=self._agent_address_model, height=22)
                 
                 ui.Spacer(height=5)
@@ -57,6 +65,11 @@ class UIBuilder:
                     on_b_click_fn=self._on_stop_stream,
                 )
                 
+                # Sync button state with current streaming state
+                if is_streaming:
+                    # Set to B state by updating button text (StateButton tracks state via text)
+                    self._stream_btn.state_button.text = "STOP STREAM"
+                
                 # Check if mtconnect is available
                 if not MTCONNECT_AVAILABLE:
                     self._stream_btn.enabled = False
@@ -65,8 +78,18 @@ class UIBuilder:
         status_frame = CollapsableFrame("Status", collapsed=False)
         with status_frame:
             with ui.VStack(style=get_style(), spacing=5, height=0):
+                # Determine initial status text based on current state
+                if not MTCONNECT_AVAILABLE:
+                    initial_status = "Error: mtconnect package not installed"
+                elif is_streaming:
+                    initial_status = f"Streaming from {current_address}"
+                elif self._mtconnect_client.is_connected:
+                    initial_status = f"Connected to {current_address}"
+                else:
+                    initial_status = "Ready"
+                
                 self._status_label = ui.Label(
-                    "Ready" if MTCONNECT_AVAILABLE else "Error: mtconnect package not installed",
+                    initial_status,
                     height=20,
                     word_wrap=True
                 )
@@ -83,8 +106,10 @@ class UIBuilder:
         data_frame = CollapsableFrame("Data Cache", collapsed=False)
         with data_frame:
             with ui.VStack(style=get_style(), spacing=5, height=0):
+                # Show current data cache if available
+                initial_data = self._mtconnect_client.get_data_summary() if self._mtconnect_client.data_cache else "No data"
                 self._data_label = ui.Label(
-                    "No data",
+                    initial_data,
                     height=100,
                     word_wrap=True,
                     alignment=ui.Alignment.LEFT_TOP

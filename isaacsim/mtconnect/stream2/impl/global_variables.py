@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+<<<<<<< HEAD
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
@@ -30,3 +31,8 @@ def clear_mtconnect_client() -> None:
     """Clear the MTConnect client instance."""
     global _mtconnect_client_instance
     _mtconnect_client_instance = None
+=======
+EXTENSION_TITLE = "MTConnect Stream"
+EXTENSION_DESCRIPTION = "Stream MTConnect data from an MTConnect Agent"
+DEFAULT_AGENT_ADDRESS = "http://localhost:5000"
+>>>>>>> extension-instance

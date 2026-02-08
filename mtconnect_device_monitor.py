@@ -17,13 +17,17 @@ from isaacsim import SimulationApp
 
 simulation_app = SimulationApp({"headless": False})
 
-import sys
-import os
 from omni.kit.app import get_app
 from pxr import Gf
 from isaacsim.core.api import World
 from isaacsim.core.utils.extensions import enable_extension
-from isaacsim.core.api.objects import VisualCuboid, DynamicCuboid
+from isaacsim.core.api.objects import DynamicCuboid
+
+# Enable your extension by its extension ID
+enable_extension("isaacsim.mtconnect.stream2")
+
+# Now import from the extension
+from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
 
 
 class MTConnectDeviceMonitor:
@@ -31,12 +35,13 @@ class MTConnectDeviceMonitor:
     
     DATAITEM_ID = "mxi_m001_avail"
     CUBE_PATH = "/World/DeviceMonitorCube"
+    AGENT_ADDRESS = "192.168.0.247:5000"
     GREEN = Gf.Vec3f(0.0, 1.0, 0.0)
     RED = Gf.Vec3f(1.0, 0.0, 0.0)
     
     def __init__(self):
         self.app = get_app()
-        self.mtconnect_client = None
+        self.extension = None
         self.cube = None
         self.cube_obj = None
         self.last_state = None
@@ -44,28 +49,11 @@ class MTConnectDeviceMonitor:
     def setup_mtconnect_client(self):
         """Get the MTConnect client from the extension."""
         try:
-            
-            
-            # Add workspace path to sys.path
-            workspace_path = os.path.join(
-                os.path.dirname(__file__),
-                "workspace",
-                "isaacsim.mtconnect.extension"
-            )
-            if workspace_path not in sys.path:
-                sys.path.insert(0, workspace_path)
-            
-            # Import the extension module directly
-            import isaacsim_mtconnect_stream_python.extension as ext_module
-            
-            # Get the Extension instance
-            ext = ext_module.Extension()
-            
-            # Initialize the extension by calling on_startup
-            ext.on_startup("isaacsim.mtconnect.stream_python")
-            
-            self.mtconnect_client = ext.mtconnect_client
-            print(f"MTConnect client obtained. Streaming: {self.mtconnect_client.is_streaming}")
+            self.extension = get_extension_instance()
+            if not self.extension:
+                print("Error: MTConnect extension not loaded")
+                return False
+            print("MTConnect extension accessed successfully")
             return True
         except Exception as e:
             print(f"Error accessing MTConnect extension: {e}")
@@ -103,11 +91,11 @@ class MTConnectDeviceMonitor:
     
     def update_cube_from_mtconnect(self):
         """Update cube color based on MTConnect device availability."""
-        if not self.mtconnect_client:
+        if not self.extension:
             return False
         
         # Get the observation for mxi_m001_avail
-        obs = self.mtconnect_client.get_observation(self.DATAITEM_ID)
+        obs = self.extension.mtconnect_client.get_observation(self.DATAITEM_ID)
         
         if not obs:
             return False
@@ -159,9 +147,9 @@ def main():
     
     # Register physics callback
     world.add_physics_callback("mtconnect_monitor", monitor.physics_callback)
-    monitor.mtconnect_client.connect('192.168.0.247:5000')
-    monitor.mtconnect_client.start_streaming()
-    print(f"Monitoring {monitor.DATAITEM_ID}")
+    monitor.extension.connect(monitor.AGENT_ADDRESS)
+    monitor.extension.start_streaming()
+    print(f"Monitoring {monitor.DATAITEM_ID} at {monitor.AGENT_ADDRESS}")
     world.reset()
     # Main simulation loop
     try:
@@ -170,7 +158,7 @@ def main():
     except KeyboardInterrupt:
         print("\nApplication stopped by user")
     finally:
-        monitor.mtconnect_client.stop_streaming()
+        monitor.extension.stop_streaming()
         simulation_app.close()
 
 
