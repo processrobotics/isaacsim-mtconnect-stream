@@ -124,7 +124,7 @@ isaacsim-mtconnect-stream/
 │   │   ├── mtconnect_client.py          # MTConnect client library
 │   │   ├── extension.py                 # Extension initialization
 │   │   ├── ui_builder.py                # UI components
-│   │   └── global_variables.py          # Configuration constants
+│   │   └── global_variables.py          # Configuration and client registry
 │   ├── ogn/                             # OmniGraph integration
 │   │   └── python/nodes/                # OmniGraph node definitions
 │   │       ├── OgnIsaacsimMtconnectStream2Py.py
@@ -147,12 +147,24 @@ The `MTConnectClient` class provides:
 5. **Caching**: In-memory storage indexed by `dataItemId`
 6. **Event System**: Callbacks for data updates, errors, and status changes
 
+### OmniGraph Integration
+
+The OmniGraph node accesses the MTConnect client through a global registry:
+
+1. **Extension Startup**: Registers the MTConnect client instance in `global_variables`
+2. **OmniGraph Node**: Queries the registry to access the client and data cache
+3. **Extension Shutdown**: Clears the client reference
+
+This design allows the OmniGraph node (which runs in a separate execution context) to access the same MTConnect client instance used by the extension UI.
+
 ### Data Flow
 
 ```
 MTConnect Agent → HTTP Stream → MTConnect Client → Data Cache → UI/OmniGraph/Scripts
-                                                   ↓
-                                              Callbacks
+                                      ↓               ↑
+                                Global Registry   Callbacks
+                                      ↓
+                                OmniGraph Node
 ```
 
 ## Usage
@@ -243,21 +255,45 @@ for data_item_id, obs in client.data_cache.items():
 
 ### OmniGraph Node
 
-The extension includes an OmniGraph node for visual scripting:
+The extension includes an OmniGraph node for visual scripting integration:
 
 **Node**: `MTConnect Stream Node`
 
 **Inputs**:
-- `dataItemIds` (token[]): Array of MTConnect dataItem IDs to retrieve
+- `dataItemIds` (token[]): Array of MTConnect dataItem IDs to retrieve (e.g., `["spindle_speed", "mxi_m001_avail"]`)
 
 **Outputs**:
 - `values` (double[]): Array of numeric values corresponding to the dataItem IDs
 - `timestamps` (token[]): Array of ISO 8601 timestamps for each value
 
+**How it Works**:
+1. The node queries the MTConnect client's data cache for each specified dataItemId
+2. Values are converted to numeric format:
+   - Numeric values are used directly
+   - String "AVAILABLE" → 1.0
+   - String "UNAVAILABLE" → 0.0
+   - Other non-numeric strings → 0.0
+3. If a dataItemId is not found, returns 0.0 with empty timestamp
+
 **Usage in Action Graph**:
-1. Add the MTConnect Stream Node to your action graph
-2. Connect the `dataItemIds` input to specify which data items to query
-3. Use the `values` and `timestamps` outputs to drive simulation behavior
+1. Ensure the MTConnect Stream extension is enabled and connected to an agent
+2. Add the **MTConnect Stream Node** to your action graph
+3. Connect an array of dataItemId strings to the `dataItemIds` input
+4. Use the `values` and `timestamps` outputs to drive simulation behavior
+
+**Example Action Graph Flow**:
+```
+[Constant Token Array: ["spindle_speed", "feed_rate"]] 
+    → [MTConnect Stream Node] 
+        → values → [Set Prim Attribute / Control Joint / etc.]
+        → timestamps → [Display in UI / Log]
+```
+
+**Important Notes**:
+- The node accesses the shared MTConnect client from the extension
+- Make sure to start streaming data in the extension UI before using the node
+- The node updates on every graph evaluation tick
+- Returns empty arrays if the client is not connected or data is unavailable
 
 ## Examples
 
@@ -501,6 +537,28 @@ pip install git+https://github.com/processrobotics/mtconnect-rest-python.git
 2. Verify network stability
 3. Increase `_stream_heartbeat_ms` for unstable connections
 4. Review console output for exceptions
+
+#### OmniGraph Node Returns Zeros
+
+**Symptoms**: OmniGraph node outputs all zeros or empty arrays
+
+**Solutions**:
+1. Ensure the extension is connected and streaming: Open the MTConnect Stream extension UI and verify connection status
+2. Check that the dataItemIds match exactly what's in the agent: Use `/probe` endpoint to verify dataItem IDs
+3. Verify data is in the cache: Check the "Data Cache" section in the extension UI
+4. Review console logs for OmniGraph node errors
+5. Make sure the dataItemIds input is properly connected in the action graph
+
+#### OmniGraph Node Value Conversion
+
+The OmniGraph node converts MTConnect values to numeric format:
+- **Numeric values**: Used directly (e.g., `123.45` → `123.45`)
+- **"AVAILABLE"**: Converted to `1.0`
+- **"UNAVAILABLE"**: Converted to `0.0`
+- **Other strings**: Attempt numeric conversion, default to `0.0` if not possible
+- **Missing data**: Returns `0.0` with empty timestamp
+
+If you need different conversion logic, you can process the values further in your action graph or modify the node's compute function.
 
 ### Debug Logging
 
