@@ -109,6 +109,15 @@ class MTConnectClient:
     @property
     def is_streaming(self) -> bool:
         return self._streaming
+    
+    @property
+    def is_connected(self) -> bool:
+        return self._api_instance is not None
+    
+    @property
+    def agent_address(self) -> str:
+        """The currently connected agent address."""
+        return self._agent_address
         
     @property
     def data_cache(self) -> dict:
