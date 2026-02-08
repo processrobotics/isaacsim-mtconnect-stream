@@ -14,6 +14,8 @@ Collection of OmniGraph tutorials:
 
 import sys
 import os
+import traceback
+from typing import Tuple, Any
 
 # Add the impl directory to the path to access global_variables
 impl_path = os.path.join(os.path.dirname(__file__), "..", "..", "impl")
@@ -21,6 +23,50 @@ if impl_path not in sys.path:
     sys.path.insert(0, impl_path)
 
 from global_variables import get_mtconnect_client
+
+
+def convert_to_numeric(value: Any) -> float:
+    """
+    Convert an MTConnect value to a numeric float.
+    
+    Args:
+        value: The value to convert (can be int, float, str, or None)
+        
+    Returns:
+        float: The converted numeric value
+        
+    Conversion rules:
+    - Numeric values: Used directly
+    - "AVAILABLE": 1.0
+    - "UNAVAILABLE": 0.0
+    - Other strings: Attempt numeric conversion, default to 0.0
+    - None: 0.0
+    """
+    if value is None:
+        return 0.0
+    
+    # Handle numeric types directly
+    if isinstance(value, (int, float)):
+        return float(value)
+    
+    # Handle string types
+    if isinstance(value, str):
+        # Handle common MTConnect status values
+        value_upper = value.upper()
+        if value_upper == "AVAILABLE":
+            return 1.0
+        elif value_upper == "UNAVAILABLE":
+            return 0.0
+        
+        # Try to convert to float
+        try:
+            return float(value)
+        except ValueError:
+            # Non-numeric string, return 0.0
+            return 0.0
+    
+    # Unknown type, return default
+    return 0.0
 
 
 class OgnIsaacsimMtconnectStream2PyInternalState:
@@ -75,32 +121,12 @@ class OgnIsaacsimMtconnectStream2Py:
                 observation = client.get_observation(str(data_item_id))
                 
                 if observation:
-                    # Extract value - try to convert to numeric
+                    # Extract value and timestamp
                     value = observation.get("value")
                     timestamp = observation.get("timestamp", "")
                     
-                    # Convert value to float if possible
-                    numeric_value = 0.0
-                    if value is not None:
-                        try:
-                            # Handle different value types
-                            if isinstance(value, (int, float)):
-                                numeric_value = float(value)
-                            elif isinstance(value, str):
-                                # Try to convert string to float
-                                # Handle common string values
-                                if value.upper() == "AVAILABLE":
-                                    numeric_value = 1.0
-                                elif value.upper() == "UNAVAILABLE":
-                                    numeric_value = 0.0
-                                else:
-                                    try:
-                                        numeric_value = float(value)
-                                    except ValueError:
-                                        # Non-numeric string, use 0.0
-                                        numeric_value = 0.0
-                        except (ValueError, TypeError):
-                            numeric_value = 0.0
+                    # Convert value to numeric format
+                    numeric_value = convert_to_numeric(value)
                     
                     values.append(numeric_value)
                     timestamps.append(timestamp)
@@ -117,7 +143,6 @@ class OgnIsaacsimMtconnectStream2Py:
             
         except Exception as e:
             db.log_error(f"Computation error: {e}")
-            import traceback
             db.log_error(f"Traceback: {traceback.format_exc()}")
             # Return empty arrays on error
             db.outputs.values = []
