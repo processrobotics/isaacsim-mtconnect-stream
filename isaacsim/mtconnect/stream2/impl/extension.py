@@ -11,12 +11,6 @@ from isaacsim.gui.components.element_wrappers import ScrollingWindow
 from isaacsim.gui.components.menu import MenuItemDescription
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 
-<<<<<<< HEAD
-from .global_variables import EXTENSION_TITLE, set_mtconnect_client, clear_mtconnect_client
-from .ui_builder import UIBuilder
-from .mtconnect_client import MTConnectClient
-
-=======
 from .global_variables import EXTENSION_TITLE
 from .ui_builder import UIBuilder
 from .mtconnect_client import MTConnectClient
@@ -28,16 +22,11 @@ _extension_instance = None
 def get_extension_instance():
     """Get the current extension instance."""
     return _extension_instance
->>>>>>> extension-instance
 
 
 class Extension(omni.ext.IExt):
     def on_startup(self, ext_id: str):
         """Initialize extension and UI elements"""
-<<<<<<< HEAD
-        self.ext_id = ext_id
-
-=======
         global _extension_instance
         _extension_instance = self
         
@@ -46,7 +35,6 @@ class Extension(omni.ext.IExt):
         # Create the MTConnect client (owned by extension)
         self.mtconnect_client = MTConnectClient()
 
->>>>>>> extension-instance
         # Build Window
         self._window = ScrollingWindow(
             title=EXTENSION_TITLE, width=400, height=300, visible=False, dockPreference=ui.DockPreference.LEFT_BOTTOM
@@ -66,16 +54,6 @@ class Extension(omni.ext.IExt):
 
         add_menu_items(self._menu_items, EXTENSION_TITLE)
 
-<<<<<<< HEAD
-        # UI Builder
-        self.ui_builder = UIBuilder()
-        self.mtconnect_client = self.ui_builder.mtconnect_client
-        
-        # Register the MTConnect client for OmniGraph node access
-        set_mtconnect_client(self.mtconnect_client)
-
-    def on_shutdown(self):
-=======
         # UI Builder - pass the extension reference so UI can access all state
         self.ui_builder = UIBuilder(self)
 
@@ -136,7 +114,6 @@ class Extension(omni.ext.IExt):
         global _extension_instance
         _extension_instance = None
         
->>>>>>> extension-instance
         remove_menu_items(self._menu_items, EXTENSION_TITLE)
 
         action_registry = omni.kit.actions.core.get_action_registry()
@@ -144,13 +121,6 @@ class Extension(omni.ext.IExt):
 
         if self._window:
             self._window = None
-<<<<<<< HEAD
-        
-        # Clear the global client reference
-        clear_mtconnect_client()
-        
-        self.ui_builder.cleanup()
-=======
         self.ui_builder.cleanup()
         
         # Cleanup client
@@ -158,7 +128,6 @@ class Extension(omni.ext.IExt):
             self.mtconnect_client.stop_streaming()
             self.mtconnect_client = None
             
->>>>>>> extension-instance
         gc.collect()
 
     def _on_window(self, visible):
@@ -188,8 +157,4 @@ class Extension(omni.ext.IExt):
         self._task = asyncio.ensure_future(dock_window())
 
     def _menu_callback(self):
-<<<<<<< HEAD
         self._window.visible = not self._window.visible
-=======
-        self._window.visible = not self._window.visible
->>>>>>> extension-instance
