@@ -4,6 +4,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+import omni.kit.app
 import omni.ui as ui
 from isaacsim.gui.components.element_wrappers import CollapsableFrame, StateButton, TextBlock
 from isaacsim.gui.components.ui_utils import get_style
@@ -149,16 +150,25 @@ class UIBuilder:
 
     def _on_data_update(self, data: dict):
         """Callback when new data is received."""
+        # Update UI on main thread since this may be called from streaming thread
+        omni.kit.app.get_app().post_update(lambda: self._update_data_label())
+
+    def _update_data_label(self):
+        """Update the data label with current summary."""
         if self._data_label:
             summary = self._mtconnect_client.get_data_summary()
             self._data_label.text = summary
 
     def _on_error(self, error: str):
         """Callback when an error occurs."""
-        self._update_status(f"Error: {error}")
+        omni.kit.app.get_app().post_update(lambda: self._update_status(f"Error: {error}"))
 
     def _on_status_change(self, status: str):
         """Callback when status changes."""
+        omni.kit.app.get_app().post_update(lambda: self._update_status_and_button(status))
+
+    def _update_status_and_button(self, status: str):
+        """Update the status label and button state."""
         self._update_status(status)
         if self._stream_btn:
             if "Streaming stopped" in status or "Disconnected" in status:

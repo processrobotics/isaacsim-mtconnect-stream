@@ -29,6 +29,7 @@ class MTConnectHeader:
     def __init__(self):
         self.instance_id: Optional[int] = None
         self.version: Optional[str] = None
+        self.json_version: Optional[int] = None
         self.sender: Optional[str] = None
         self.buffer_size: Optional[int] = None
         self.first_sequence: Optional[int] = None
@@ -47,6 +48,7 @@ class MTConnectHeader:
             streams = response["MTConnectStreams"]
             if isinstance(streams, dict):
                 header = streams.get("Header")
+                self.json_version = self._parse_int(streams.get("jsonVersion"))
         elif "Header" in response:
             header = response["Header"]
                 
@@ -70,6 +72,7 @@ class MTConnectHeader:
             
     def __repr__(self):
         return (f"MTConnectHeader(instance_id={self.instance_id}, "
+                f"json_version={self.json_version}, "
                 f"next_sequence={self.next_sequence}, "
                 f"last_sequence={self.last_sequence})")
 
@@ -196,6 +199,7 @@ class MTConnectClient:
             
             # Process the response
             self._process_json_response(response_dict, source="current")
+            self._notify_data_update()
             self._notify_status(f"Connected. Next sequence: {self._header.next_sequence}")
             
             return True
@@ -232,34 +236,43 @@ class MTConnectClient:
             if source == "current" or len(self._data_cache) > old_count:
                 carb.log_warn(f"MTConnect: {source} - cache now has {len(self._data_cache)} items, seq={self._header.next_sequence}")
     
-    def _merge_streams_data(self, streams_data: dict):
+    def _merge_streams_data(self, streams_data):
         """
         Merge Streams data into the cache.
         
-        MTConnect JSON structure:
-        {
-            "DeviceStream": [
-                {
-                    "name": "...",
-                    "uuid": "...",
-                    "ComponentStream": [
-                        {
-                            "component": "...",
-                            "componentId": "...",
-                            "Samples": [...],
-                            "Events": [...],
-                            "Condition": [...]
-                        }
-                    ]
-                }
-            ]
-        }
+        MTConnect JSON structure depends on jsonVersion:
+        - jsonVersion 1: Streams is [{"DeviceStream": {...}}]
+        - jsonVersion 2: Streams is {"DeviceStream": [...]}
         """
         if not streams_data:
             carb.log_warn("MTConnect: _merge_streams_data got empty streams_data")
             return
         
-        device_streams = streams_data.get("DeviceStream", [])
+        json_version = self._header.json_version
+        if json_version == 1:
+            # Version 1: Streams is a list of {"DeviceStream": ...}
+            if isinstance(streams_data, list):
+                device_streams = []
+                for item in streams_data:
+                    if isinstance(item, dict) and "DeviceStream" in item:
+                        device_streams.append(item["DeviceStream"])
+                    else:
+                        self._notify_error(f"Unexpected structure in jsonVersion {json_version}: expected list of dicts with 'DeviceStream', got {type(item)}")
+                        return
+            else:
+                self._notify_error(f"Unexpected structure in jsonVersion {json_version}: expected list, got {type(streams_data)}")
+                return
+        elif json_version == 2 or json_version is None:
+            # Version 2 or unknown: Streams is {"DeviceStream": [...]}
+            if isinstance(streams_data, dict):
+                device_streams = streams_data.get("DeviceStream", [])
+            else:
+                self._notify_error(f"Unexpected structure in jsonVersion {json_version}: expected dict, got {type(streams_data)}")
+                return
+        else:
+            self._notify_error(f"Unsupported jsonVersion {json_version}")
+            return
+            
         if not device_streams:
             return
         if not isinstance(device_streams, list):
@@ -499,8 +512,18 @@ class MTConnectClient:
                 try:
                     json_str = body.decode('utf-8').strip()
                     if json_str:
-                        carb.log_warn(f"MTConnect: Parsing multipart frame, body length={len(json_str)}")
                         response_dict = json.loads(json_str)
+                        
+                        # Extract sequence for logging
+                        sequence = None
+                        if "MTConnectStreams" in response_dict:
+                            mtc_streams = response_dict["MTConnectStreams"]
+                            if isinstance(mtc_streams, dict):
+                                header = mtc_streams.get("Header")
+                                if isinstance(header, dict):
+                                    sequence = header.get("nextSequence") or header.get("lastSequence")
+                        
+                        carb.log_warn(f"MTConnect: Parsing multipart frame, body length={len(json_str)}, seq={sequence}")
                         self._process_json_response(response_dict, source="stream")
                         self._notify_data_update()
                 except json.JSONDecodeError as e:
@@ -528,6 +551,17 @@ class MTConnectClient:
             
             carb.log_warn(f"MTConnect: Single response received, length={len(response_data)}")
             response_dict = json.loads(response_data)
+            
+            # Extract sequence for logging
+            sequence = None
+            if "MTConnectStreams" in response_dict:
+                mtc_streams = response_dict["MTConnectStreams"]
+                if isinstance(mtc_streams, dict):
+                    header = mtc_streams.get("Header")
+                    if isinstance(header, dict):
+                        sequence = header.get("nextSequence") or header.get("lastSequence")
+            
+            carb.log_warn(f"MTConnect: Processing single response, seq={sequence}")
             self._process_json_response(response_dict, source="sample")
             self._notify_data_update()
             
@@ -565,6 +599,7 @@ class MTConnectClient:
         
         lines = [
             f"Instance ID: {self._header.instance_id}",
+            f"JSON Version: {self._header.json_version}",
             f"Next Sequence: {self._header.next_sequence}",
             f"Buffer: {self._header.first_sequence} - {self._header.last_sequence}",
             f"Cached Items: {len(self._data_cache)}",
