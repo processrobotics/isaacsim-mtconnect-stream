@@ -23,7 +23,16 @@ impl_path = os.path.join(os.path.dirname(__file__), "..", "..", "impl")
 if impl_path not in sys.path:
     sys.path.insert(0, impl_path)
 
-from extension import get_extension_instance
+# Import get_extension_instance - this may not be available during node discovery
+# but will be available during actual execution
+try:
+    from extension import get_extension_instance
+except ImportError:
+    # During node discovery, the extension may not be loaded yet
+    # This is fine - the import will succeed during actual node execution
+    def get_extension_instance():
+        """Fallback function during node discovery."""
+        return None
 
 
 def convert_to_numeric(value: Any) -> float:
@@ -93,6 +102,15 @@ class OgnIsaacsimMtconnectStream2Py:
         state = db.internal_state
 
         try:
+            # Import get_extension_instance at runtime to ensure extension is loaded
+            try:
+                from extension import get_extension_instance
+            except ImportError:
+                # Extension not loaded yet
+                db.outputs.values = []
+                db.outputs.timestamps = []
+                return True
+            
             # Get the extension instance
             extension = get_extension_instance()
             
