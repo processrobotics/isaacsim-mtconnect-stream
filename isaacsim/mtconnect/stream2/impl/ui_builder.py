@@ -34,9 +34,23 @@ class UIBuilder:
 
     def cleanup(self):
         """Clean up resources when extension window is closed."""
-        # Don't disconnect - just cleanup UI references
-        # The extension owns the client lifecycle
-        pass
+        # Clear callbacks to break circular references
+        if self._mtconnect_client:
+            self._mtconnect_client.set_callbacks(
+                on_data_update=None,
+                on_error=None,
+                on_status_change=None
+            )
+        
+        # Clear all UI element references
+        self._agent_address_model = None
+        self._status_label = None
+        self._data_label = None
+        self._stream_btn = None
+        
+        # Clear client and extension references to allow garbage collection
+        self._mtconnect_client = None
+        self._extension = None
 
     def build_ui(self):
         """Build the MTConnect streaming UI."""
@@ -150,8 +164,8 @@ class UIBuilder:
 
     def _on_data_update(self, data: dict):
         """Callback when new data is received."""
-        # Update UI on main thread since this may be called from streaming thread
-        omni.kit.app.get_app().post_update(lambda: self._update_data_label())
+        # Update UI directly
+        self._update_data_label()
 
     def _update_data_label(self):
         """Update the data label with current summary."""
@@ -161,11 +175,11 @@ class UIBuilder:
 
     def _on_error(self, error: str):
         """Callback when an error occurs."""
-        omni.kit.app.get_app().post_update(lambda: self._update_status(f"Error: {error}"))
+        self._update_status(f"Error: {error}")
 
     def _on_status_change(self, status: str):
         """Callback when status changes."""
-        omni.kit.app.get_app().post_update(lambda: self._update_status_and_button(status))
+        self._update_status_and_button(status)
 
     def _update_status_and_button(self, status: str):
         """Update the status label and button state."""

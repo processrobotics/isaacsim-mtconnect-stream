@@ -195,7 +195,7 @@ class MTConnectClient:
                 response_data = response_data.decode('utf-8')
             
             response_dict = json.loads(response_data)
-            carb.log_warn(f"MTConnect: /current response received, keys: {list(response_dict.keys())}")
+            carb.log_verbose(f"MTConnect: /current response received, keys: {list(response_dict.keys())}")
             
             # Process the response
             self._process_json_response(response_dict, source="current")
@@ -220,6 +220,8 @@ class MTConnectClient:
             carb.log_warn(f"MTConnect: Empty response from {source}")
             return
         
+        carb.log_verbose(f"MTConnect: _process_json_response from {source}, keys={list(response_dict.keys())}")
+        
         # Update header info
         self._header.update_from_dict(response_dict)
         
@@ -229,12 +231,15 @@ class MTConnectClient:
             mtc_streams = response_dict["MTConnectStreams"]
             if isinstance(mtc_streams, dict):
                 streams_data = mtc_streams.get("Streams")
+                carb.log_verbose(f"MTConnect: Found Streams data: {type(streams_data)}")
+        else:
+            carb.log_warn(f"MTConnect: No MTConnectStreams in response from {source}")
         
         if streams_data:
             old_count = len(self._data_cache)
             self._merge_streams_data(streams_data)
             if source == "current" or len(self._data_cache) > old_count:
-                carb.log_warn(f"MTConnect: {source} - cache now has {len(self._data_cache)} items, seq={self._header.next_sequence}")
+                carb.log_verbose(f"MTConnect: {source} - cache now has {len(self._data_cache)} items, seq={self._header.next_sequence}")
     
     def _merge_streams_data(self, streams_data):
         """
@@ -247,6 +252,8 @@ class MTConnectClient:
         if not streams_data:
             carb.log_warn("MTConnect: _merge_streams_data got empty streams_data")
             return
+        
+        carb.log_verbose(f"MTConnect: _merge_streams_data processing {type(streams_data)}, jsonVersion={self._header.json_version}")
         
         json_version = self._header.json_version
         if json_version == 1:
@@ -274,9 +281,12 @@ class MTConnectClient:
             return
             
         if not device_streams:
+            carb.log_warn("MTConnect: No device_streams found, returning early")
             return
         if not isinstance(device_streams, list):
             device_streams = [device_streams]
+        
+        carb.log_verbose(f"MTConnect: Processing {len(device_streams)} device_streams")
         
         for device_stream in device_streams:
             if not isinstance(device_stream, dict):
@@ -284,35 +294,76 @@ class MTConnectClient:
                 
             device_name = device_stream.get("name", "unknown")
             
-            component_streams = device_stream.get("ComponentStream", [])
+            # Check jsonVersion to determine structure
+            json_version = self._header.json_version
+            
+            # Get component streams based on version
+            if json_version == 2 or json_version is None:
+                # jsonVersion 2 or unknown: "ComponentStream" (singular) is a direct array
+                component_streams = device_stream.get("ComponentStream", [])
+            else:
+                # jsonVersion 1: "ComponentStreams" (plural) is array of {"ComponentStream": {...}}
+                component_streams = device_stream.get("ComponentStreams", [])
+            
             if not isinstance(component_streams, list):
                 component_streams = [component_streams]
             
-            for comp_stream in component_streams:
-                if not isinstance(comp_stream, dict):
+            carb.log_verbose(f"MTConnect:   Processing {len(component_streams)} ComponentStream(s) for device '{device_name}' (jsonVersion={json_version})")
+            
+            for comp_stream_item in component_streams:
+                if not isinstance(comp_stream_item, dict):
                     continue
                 
+                # Unwrap based on version
+                if json_version == 2 or json_version is None:
+                    # jsonVersion 2 or unknown: comp_stream_item is the component stream directly
+                    comp_stream = comp_stream_item
+                else:
+                    # jsonVersion 1: comp_stream_item is {"ComponentStream": {...}}
+                    comp_stream = comp_stream_item.get("ComponentStream")
+                    if not comp_stream:
+                        continue
+                
+                comp_name = comp_stream.get("name", "unknown")
+                
                 # Process Samples, Events, and Condition
-                # Structure is: {"Samples": {"AssetUpdateRate": [{...}, ...], "Temp": [{...}]}, ...}
                 for category in ["Samples", "Events", "Condition"]:
                     category_data = comp_stream.get(category)
                     if not category_data:
                         continue
                     
-                    # category_data is a dict where keys are data types (e.g., "AssetUpdateRate")
-                    # and values are lists of observations
-                    if isinstance(category_data, dict):
+                    cached_count = 0
+                    
+                    if json_version == 2 or json_version is None:
+                        # jsonVersion 2 or unknown: category_data is dict {"DataType": [observations]}
+                        if not isinstance(category_data, dict):
+                            continue
+                        
                         for data_type, observations in category_data.items():
                             if not isinstance(observations, list):
                                 observations = [observations]
+                            
                             for obs in observations:
                                 if isinstance(obs, dict):
                                     self._cache_observation(obs, device_name, category)
-                    elif isinstance(category_data, list):
-                        # Fallback if it's a list directly
+                                    cached_count += 1
+                    else:
+                        # jsonVersion 1: category_data is list [{"DataType": {observation}}]
+                        if not isinstance(category_data, list):
+                            category_data = [category_data]
+                        
                         for item in category_data:
-                            if isinstance(item, dict):
-                                self._cache_observation(item, device_name, category)
+                            if not isinstance(item, dict):
+                                continue
+                            
+                            # Each item has one key (the data type like "Position", "Load", etc.)
+                            for data_type, obs in item.items():
+                                if isinstance(obs, dict):
+                                    self._cache_observation(obs, device_name, category)
+                                    cached_count += 1
+                    
+                    if cached_count > 0:
+                        carb.log_verbose(f"MTConnect:       Cached {cached_count} {category} observations from '{comp_name}'")
     
     def _cache_observation(self, obs: dict, device_name: str, category: str):
         """Cache a single observation by its dataItemId."""
@@ -332,6 +383,7 @@ class MTConnectClient:
             # Include any additional fields (like subType, units, etc.)
             **{k: v for k, v in obs.items() if k not in ["dataItemId", "name", "value", "timestamp", "sequence"]}
         }
+        carb.log_verbose(f"MTConnect: Cached '{data_item_id}' (name={obs.get('name')}) = {obs.get('value')}")
                 
     def start_streaming(self) -> bool:
         """
@@ -365,7 +417,7 @@ class MTConnectClient:
         Uses the mtconnect library's sample_get with interval parameter,
         which returns a multipart/x-mixed-replace response.
         """
-        carb.log_warn(f"MTConnect: Stream loop started, next_sequence={self._header.next_sequence}")
+        carb.log_info(f"MTConnect: Stream loop started, next_sequence={self._header.next_sequence}")
         
         while not self._stop_event.is_set():
             try:
@@ -476,19 +528,19 @@ class MTConnectClient:
             # Find boundary
             boundary_idx = buffer.find(boundary)
             if boundary_idx < 0:
-                carb.log_warn(f"MTConnect: No boundary found in buffer (len={len(buffer)}), waiting for more data")
+                carb.log_info(f"MTConnect: No boundary found in buffer (len={len(buffer)}), waiting for more data")
                 return buffer
             
             # Find end of headers (double CRLF)
             header_end = buffer.find(b"\r\n\r\n", boundary_idx)
             if header_end < 0:
-                carb.log_warn(f"MTConnect: Found boundary at {boundary_idx} but no header end yet")
+                carb.log_error(f"MTConnect: Found boundary at {boundary_idx} but no header end yet")
                 return buffer  # Incomplete headers
             
             # Parse headers to get Content-Length
             header_section = buffer[boundary_idx + len(boundary):header_end].decode('utf-8', errors='ignore')
             content_length = self._parse_content_length(header_section)
-            carb.log_warn(f"MTConnect: Frame headers: {header_section[:200]}, Content-Length={content_length}")
+            carb.log_info(f"MTConnect: Frame headers: {header_section[:200]}, Content-Length={content_length}")
             
             if content_length is None:
                 # No Content-Length, try to find next boundary
@@ -523,7 +575,7 @@ class MTConnectClient:
                                 if isinstance(header, dict):
                                     sequence = header.get("nextSequence") or header.get("lastSequence")
                         
-                        carb.log_warn(f"MTConnect: Parsing multipart frame, body length={len(json_str)}, seq={sequence}")
+                        carb.log_verbose(f"MTConnect: Parsing multipart frame, body length={len(json_str)}, seq={sequence}")
                         self._process_json_response(response_dict, source="stream")
                         self._notify_data_update()
                 except json.JSONDecodeError as e:
@@ -620,7 +672,13 @@ class MTConnectClient:
     
     def get_observation(self, data_item_id: str) -> Optional[dict]:
         """Get a single observation from the cache by dataItemId."""
-        return self._data_cache.get(data_item_id)
+        result = self._data_cache.get(data_item_id)
+        if result:
+            carb.log_info(f"MTConnect: get_observation('{data_item_id}') FOUND: {result.get('value')}")
+        else:
+            available_keys = list(self._data_cache.keys())
+            carb.log_warn(f"MTConnect: get_observation('{data_item_id}') NOT FOUND. Available keys ({len(available_keys)}): {available_keys[:10]}...")
+        return result
     
     def get_observations_by_name(self, name: str) -> list:
         """Get all observations matching a name pattern."""

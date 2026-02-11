@@ -6,11 +6,16 @@
         "uiName": "MTConnect Stream Node",
         "description": [
             "MTConnect stream connector",
-            "Allows connection of MTConnect DataItems from a stream to prims/attributes/xforms/etc"
+            "Connect MTConnect DataItems to prims/attributes/xforms/etc"
         ],
         "categoryDefinitions": "config/CategoryDefinition.json",
         "categories": ["extension:Category"],
         "inputs": {
+            "execIn" : {
+                "type" : "execution",
+                "uiName": "Exec In",
+                "description": "Triggering this causes the sensor pipeline to be generated"
+            },
             "dataItemIds": {
                 "type": "token[]",
                 "uiName": "DataItem IDs",
@@ -19,10 +24,15 @@
             }
         },
         "outputs": {
+            "execOut": {
+                "type" : "execution",
+                "uiName": "Exec Out",
+                "description": "Triggering this causes the sensor pipeline to be generated"
+            },
             "values": {
                 "type": "double[]",
                 "uiName": "Values",
-                "description": "Values corresponding to the dataItem IDs"
+                "description": "Values corresponding to the dataItem IDs (one per dataItemId)"
             },
             "timestamps": {
                 "type": "token[]",

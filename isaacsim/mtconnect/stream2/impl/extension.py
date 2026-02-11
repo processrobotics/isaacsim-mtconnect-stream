@@ -7,9 +7,11 @@ import gc
 import omni
 import omni.kit.commands
 import omni.ui as ui
+import omni.usd
 from isaacsim.gui.components.element_wrappers import ScrollingWindow
 from isaacsim.gui.components.menu import MenuItemDescription
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
+from pxr import Sdf
 
 from .global_variables import EXTENSION_TITLE
 from .ui_builder import UIBuilder
@@ -31,9 +33,13 @@ class Extension(omni.ext.IExt):
         _extension_instance = self
         
         self.ext_id = ext_id
+        self._last_agent_url = None
 
         # Create the MTConnect client (owned by extension)
         self.mtconnect_client = MTConnectClient()
+        
+        # Load settings from USD if available
+        self._load_settings_from_usd()
 
         # Build Window
         self._window = ScrollingWindow(
@@ -58,6 +64,54 @@ class Extension(omni.ext.IExt):
         self.ui_builder = UIBuilder(self)
 
     # -------------------------------------------------------------------------
+    # USD Settings Persistence
+    # -------------------------------------------------------------------------
+    
+    def _get_settings_prim(self):
+        """Get or create the MTConnect settings prim in USD."""
+        stage = omni.usd.get_context().get_stage()
+        if not stage:
+            return None
+        
+        settings_path = "/World/MTConnectSettings"
+        prim = stage.GetPrimAtPath(settings_path)
+        
+        if not prim.IsValid():
+            # Create if doesn't exist
+            prim = stage.DefinePrim(settings_path)
+        
+        return prim
+    
+    def _load_settings_from_usd(self):
+        """Load saved settings from USD on startup."""
+        prim = self._get_settings_prim()
+        if not prim:
+            return
+        
+        # Read agent URL if it exists
+        if prim.HasAttribute("mtconnect:agentUrl"):
+            url_attr = prim.GetAttribute("mtconnect:agentUrl")
+            saved_url = url_attr.Get()
+            if saved_url:
+                self._last_agent_url = saved_url
+                print(f"[MTConnect] Loaded saved agent URL from USD: {saved_url}")
+    
+    def _save_agent_url_to_usd(self, agent_address: str):
+        """Save the agent URL to USD for persistence."""
+        prim = self._get_settings_prim()
+        if not prim:
+            return
+        
+        # Create or update the attribute
+        if not prim.HasAttribute("mtconnect:agentUrl"):
+            attr = prim.CreateAttribute("mtconnect:agentUrl", Sdf.ValueTypeNames.String)
+        else:
+            attr = prim.GetAttribute("mtconnect:agentUrl")
+        
+        attr.Set(agent_address)
+        print(f"[MTConnect] Saved agent URL to USD: {agent_address}")
+
+    # -------------------------------------------------------------------------
     # Public API for external scripts and UI
     # -------------------------------------------------------------------------
     
@@ -71,7 +125,11 @@ class Extension(omni.ext.IExt):
         Returns:
             True if connection successful, False otherwise
         """
-        return self.mtconnect_client.connect(agent_address)
+        result = self.mtconnect_client.connect(agent_address)
+        if result:
+            self._last_agent_url = agent_address
+            self._save_agent_url_to_usd(agent_address)
+        return result
     
     def start_streaming(self) -> bool:
         """
@@ -104,6 +162,11 @@ class Extension(omni.ext.IExt):
     def agent_address(self) -> str:
         """The currently connected agent address."""
         return self.mtconnect_client.agent_address
+    
+    @property
+    def last_agent_url(self) -> str:
+        """The last agent URL used (loaded from USD or most recent connection)."""
+        return self._last_agent_url
     
     @property
     def data_cache(self) -> dict:
