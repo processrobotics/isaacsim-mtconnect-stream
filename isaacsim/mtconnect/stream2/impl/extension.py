@@ -7,20 +7,39 @@ import gc
 import omni
 import omni.kit.commands
 import omni.ui as ui
+import omni.usd
 from isaacsim.gui.components.element_wrappers import ScrollingWindow
 from isaacsim.gui.components.menu import MenuItemDescription
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
+from pxr import Sdf
 
 from .global_variables import EXTENSION_TITLE
 from .ui_builder import UIBuilder
 from .mtconnect_client import MTConnectClient
 
+# Global reference to the extension instance for external access
+_extension_instance = None
+
+
+def get_extension_instance():
+    """Get the current extension instance."""
+    return _extension_instance
 
 
 class Extension(omni.ext.IExt):
     def on_startup(self, ext_id: str):
         """Initialize extension and UI elements"""
+        global _extension_instance
+        _extension_instance = self
+        
         self.ext_id = ext_id
+        self._last_agent_url = None
+
+        # Create the MTConnect client (owned by extension)
+        self.mtconnect_client = MTConnectClient()
+        
+        # Load settings from USD if available
+        self._load_settings_from_usd()
 
         # Build Window
         self._window = ScrollingWindow(
@@ -41,11 +60,123 @@ class Extension(omni.ext.IExt):
 
         add_menu_items(self._menu_items, EXTENSION_TITLE)
 
-        # UI Builder
-        self.ui_builder = UIBuilder()
-        self.mtconnect_client = self.ui_builder.mtconnect_client
+        # UI Builder - pass the extension reference so UI can access all state
+        self.ui_builder = UIBuilder(self)
+
+    # -------------------------------------------------------------------------
+    # USD Settings Persistence
+    # -------------------------------------------------------------------------
+    
+    def _get_settings_prim(self):
+        """Get or create the MTConnect settings prim in USD."""
+        stage = omni.usd.get_context().get_stage()
+        if not stage:
+            return None
+        
+        settings_path = "/World/MTConnectSettings"
+        prim = stage.GetPrimAtPath(settings_path)
+        
+        if not prim.IsValid():
+            # Create if doesn't exist
+            prim = stage.DefinePrim(settings_path)
+        
+        return prim
+    
+    def _load_settings_from_usd(self):
+        """Load saved settings from USD on startup."""
+        prim = self._get_settings_prim()
+        if not prim:
+            return
+        
+        # Read agent URL if it exists
+        if prim.HasAttribute("mtconnect:agentUrl"):
+            url_attr = prim.GetAttribute("mtconnect:agentUrl")
+            saved_url = url_attr.Get()
+            if saved_url:
+                self._last_agent_url = saved_url
+                print(f"[MTConnect] Loaded saved agent URL from USD: {saved_url}")
+    
+    def _save_agent_url_to_usd(self, agent_address: str):
+        """Save the agent URL to USD for persistence."""
+        prim = self._get_settings_prim()
+        if not prim:
+            return
+        
+        # Create or update the attribute
+        if not prim.HasAttribute("mtconnect:agentUrl"):
+            attr = prim.CreateAttribute("mtconnect:agentUrl", Sdf.ValueTypeNames.String)
+        else:
+            attr = prim.GetAttribute("mtconnect:agentUrl")
+        
+        attr.Set(agent_address)
+        print(f"[MTConnect] Saved agent URL to USD: {agent_address}")
+
+    # -------------------------------------------------------------------------
+    # Public API for external scripts and UI
+    # -------------------------------------------------------------------------
+    
+    def connect(self, agent_address: str) -> bool:
+        """
+        Connect to an MTConnect agent.
+        
+        Args:
+            agent_address: The base URL of the MTConnect agent (e.g., "http://192.168.0.247:5000")
+            
+        Returns:
+            True if connection successful, False otherwise
+        """
+        result = self.mtconnect_client.connect(agent_address)
+        if result:
+            self._last_agent_url = agent_address
+            self._save_agent_url_to_usd(agent_address)
+        return result
+    
+    def start_streaming(self) -> bool:
+        """
+        Start streaming data from the connected agent.
+        
+        Returns:
+            True if streaming started successfully, False otherwise
+        """
+        return self.mtconnect_client.start_streaming()
+    
+    def stop_streaming(self):
+        """Stop streaming data."""
+        self.mtconnect_client.stop_streaming()
+    
+    def disconnect(self):
+        """Disconnect from the agent and stop streaming."""
+        self.mtconnect_client.disconnect()
+    
+    @property
+    def is_streaming(self) -> bool:
+        """Whether the client is currently streaming data."""
+        return self.mtconnect_client.is_streaming
+    
+    @property
+    def is_connected(self) -> bool:
+        """Whether the client is connected to an agent."""
+        return self.mtconnect_client.is_connected
+    
+    @property
+    def agent_address(self) -> str:
+        """The currently connected agent address."""
+        return self.mtconnect_client.agent_address
+    
+    @property
+    def last_agent_url(self) -> str:
+        """The last agent URL used (loaded from USD or most recent connection)."""
+        return self._last_agent_url
+    
+    @property
+    def data_cache(self) -> dict:
+        """The current data cache from the MTConnect stream."""
+        return self.mtconnect_client.data_cache
 
     def on_shutdown(self):
+        global _extension_instance
+        _extension_instance = None
+        
         remove_menu_items(self._menu_items, EXTENSION_TITLE)
 
         action_registry = omni.kit.actions.core.get_action_registry()
@@ -54,6 +185,12 @@ class Extension(omni.ext.IExt):
         if self._window:
             self._window = None
         self.ui_builder.cleanup()
+        
+        # Cleanup client
+        if self.mtconnect_client:
+            self.mtconnect_client.stop_streaming()
+            self.mtconnect_client = None
+            
         gc.collect()
 
     def _on_window(self, visible):
