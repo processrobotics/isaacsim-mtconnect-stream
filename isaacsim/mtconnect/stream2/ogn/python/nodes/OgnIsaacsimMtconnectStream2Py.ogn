@@ -29,15 +29,25 @@
                 "uiName": "Exec Out",
                 "description": "Triggering this causes the sensor pipeline to be generated"
             },
-            "values": {
-                "type": "double[]",
-                "uiName": "Values",
-                "description": "Values corresponding to the dataItem IDs (one per dataItemId)"
-            },
             "timestamps": {
                 "type": "token[]",
                 "uiName": "Timestamps",
                 "description": "Timestamps for the values"
+            },
+            "intValues": {
+                "type": "int[]",
+                "uiName": "int[]",
+                "description": "Values as integers (0 if conversion fails)"
+            },
+            "doubleValues": {
+                "type": "double[]",
+                "uiName": "double[]",
+                "description": "Values as doubles (0.0 if conversion fails)"
+            },
+            "stringValues": {
+                "type": "token[]",
+                "uiName": "string[]",
+                "description": "Values as strings (empty string if no value)"
             }
         }
     }

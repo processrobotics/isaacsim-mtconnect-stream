@@ -137,6 +137,10 @@ class OgnIsaacsimMtconnectStream2Py:
                 carb.log_warn("MTConnect OmniGraph Node: Extension instance not available")
                 db.outputs.values = []
                 db.outputs.timestamps = []
+                db.outputs.intValues = []
+                db.outputs.floatValues = []
+                db.outputs.doubleValues = []
+                db.outputs.stringValues = []
                 return True
             
             # Store reference for debugging
@@ -154,11 +158,19 @@ class OgnIsaacsimMtconnectStream2Py:
                 carb.log_error("MTConnect OmniGraph Node: No input data items specified")
                 db.outputs.values = []
                 db.outputs.timestamps = []
+                db.outputs.intValues = []
+                db.outputs.floatValues = []
+                db.outputs.doubleValues = []
+                db.outputs.stringValues = []
                 return True
             
             # Query the MTConnect client for each dataItemId
             values = []
             timestamps = []
+            int_values = []
+            float_values = []
+            double_values = []
+            string_values = []
             
             for data_item_id in data_item_ids:
                 observation = client.get_observation(str(data_item_id))
@@ -168,21 +180,55 @@ class OgnIsaacsimMtconnectStream2Py:
                     value = observation.get("value")
                     timestamp = observation.get("timestamp", "")
                     
-                    # Convert value to numeric format
+                    # Convert value to numeric format for backward compatibility
                     numeric_value = convert_to_numeric(value)
+                    
+                    # Convert to different primitive types
+                    # Int conversion
+                    try:
+                        int_val = int(numeric_value)
+                    except (ValueError, TypeError):
+                        int_val = 0
+                    
+                    # Float conversion
+                    try:
+                        float_val = float(numeric_value)
+                    except (ValueError, TypeError):
+                        float_val = 0.0
+                    
+                    # Double conversion (same as float in Python)
+                    try:
+                        double_val = float(numeric_value)
+                    except (ValueError, TypeError):
+                        double_val = 0.0
+                    
+                    # String conversion
+                    str_val = str(value) if value is not None else ""
                     
                     carb.log_info(f"MTConnect OmniGraph Node: {data_item_id} = {numeric_value} (raw: {value}) @ {timestamp}")
                     values.append(numeric_value)
                     timestamps.append(timestamp)
+                    int_values.append(int_val)
+                    float_values.append(float_val)
+                    double_values.append(double_val)
+                    string_values.append(str_val)
                 else:
                     # DataItem not found - append default values
-                    carb.log_warn(f"MTConnect OmniGraph Node: DataItem '{data_item_id}' not found - using default 0.0")
+                    carb.log_warn(f"MTConnect OmniGraph Node: DataItem '{data_item_id}' not found - using defaults")
                     values.append(0.0)
                     timestamps.append("")
+                    int_values.append(0)
+                    float_values.append(0.0)
+                    double_values.append(0.0)
+                    string_values.append("")
             
             # Write output values
             db.outputs.values = values
             db.outputs.timestamps = timestamps
+            db.outputs.intValues = int_values
+            db.outputs.floatValues = float_values
+            db.outputs.doubleValues = double_values
+            db.outputs.stringValues = string_values
             carb.log_verbose(f"MTConnect OmniGraph Node: Output {len(values)} values: {values}")
             
             state.status = True
@@ -195,6 +241,10 @@ class OgnIsaacsimMtconnectStream2Py:
             # Return empty arrays on error
             db.outputs.values = []
             db.outputs.timestamps = []
+            db.outputs.intValues = []
+            db.outputs.floatValues = []
+            db.outputs.doubleValues = []
+            db.outputs.stringValues = []
             return False
             
         return True
