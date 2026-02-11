@@ -2,5 +2,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
 EXTENSION_TITLE = "MTConnect Stream"
-EXTENSION_DESCRIPTION = "Stream MTConnect data from an MTConnect Agent"
-DEFAULT_AGENT_ADDRESS = "http://localhost:5000"
+EXTENSION_DESCRIPTION = "Stream data from an MTConnect Agent"
+DEFAULT_AGENT_ADDRESS = "http://demo.mtconnect.org"

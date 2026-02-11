@@ -145,9 +145,7 @@ class Extension(omni.ext.IExt):
             
             # Verify it was saved
             saved_value = attr.Get()
-            if saved_value == agent_address:
-                print(f"[MTConnect] ✓ Verified attribute value: {saved_value}")
-            else:
+            if saved_value != agent_address:
                 print(f"[MTConnect] WARNING: Verification failed. Set: {agent_address}, Got: {saved_value}")
                 
         except Exception as e:
@@ -164,7 +162,7 @@ class Extension(omni.ext.IExt):
         Connect to an MTConnect agent.
         
         Args:
-            agent_address: The base URL of the MTConnect agent (e.g., "http://192.168.0.247:5000")
+            agent_address: The base URL of the MTConnect agent (e.g., "http://demo.mtconnect.org:5000")
             
         Returns:
             True if connection successful, False otherwise
