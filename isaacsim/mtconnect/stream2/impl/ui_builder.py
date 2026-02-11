@@ -55,8 +55,12 @@ class UIBuilder:
     def build_ui(self):
         """Build the MTConnect streaming UI."""
         
-        # Get current state from client
-        current_address = self._mtconnect_client.agent_address or DEFAULT_AGENT_ADDRESS
+        # Get current state from client, or last saved URL from USD
+        current_address = (
+            self._mtconnect_client.agent_address or 
+            self._extension.last_agent_url or 
+            DEFAULT_AGENT_ADDRESS
+        )
         is_streaming = self._mtconnect_client.is_streaming
         
         # Connection Settings Frame
@@ -145,9 +149,9 @@ class UIBuilder:
             self._stream_btn.reset()
             return
         
-        # Connect and start streaming
-        if self._mtconnect_client.connect(agent_address):
-            if not self._mtconnect_client.start_streaming():
+        # Connect and start streaming using extension's connect method (which saves to USD)
+        if self._extension.connect(agent_address):
+            if not self._extension.start_streaming():
                 self._stream_btn.reset()
         else:
             self._stream_btn.reset()
@@ -160,7 +164,7 @@ class UIBuilder:
         except Exception:
             pass
         print("MTConnect UI: Stop clicked")
-        self._mtconnect_client.stop_streaming()
+        self._extension.stop_streaming()
 
     def _on_data_update(self, data: dict):
         """Callback when new data is received."""

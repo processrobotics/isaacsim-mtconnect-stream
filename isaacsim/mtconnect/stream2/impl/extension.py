@@ -84,8 +84,16 @@ class Extension(omni.ext.IExt):
     
     def _load_settings_from_usd(self):
         """Load saved settings from USD on startup."""
-        prim = self._get_settings_prim()
-        if not prim:
+        stage = omni.usd.get_context().get_stage()
+        if not stage:
+            print("[MTConnect] No stage available on startup")
+            return
+        
+        settings_path = "/World/MTConnectSettings"
+        prim = stage.GetPrimAtPath(settings_path)
+        
+        if not prim or not prim.IsValid():
+            print(f"[MTConnect] No settings prim found at {settings_path}")
             return
         
         # Read agent URL if it exists
@@ -95,21 +103,57 @@ class Extension(omni.ext.IExt):
             if saved_url:
                 self._last_agent_url = saved_url
                 print(f"[MTConnect] Loaded saved agent URL from USD: {saved_url}")
+            else:
+                print("[MTConnect] Agent URL attribute exists but is empty")
+        else:
+            print("[MTConnect] No saved agent URL found in USD")
     
     def _save_agent_url_to_usd(self, agent_address: str):
         """Save the agent URL to USD for persistence."""
-        prim = self._get_settings_prim()
-        if not prim:
+        stage = omni.usd.get_context().get_stage()
+        if not stage:
+            print("[MTConnect] ERROR: No stage available to save agent URL")
             return
         
-        # Create or update the attribute
-        if not prim.HasAttribute("mtconnect:agentUrl"):
-            attr = prim.CreateAttribute("mtconnect:agentUrl", Sdf.ValueTypeNames.String)
-        else:
-            attr = prim.GetAttribute("mtconnect:agentUrl")
+        settings_path = "/World/MTConnectSettings"
         
-        attr.Set(agent_address)
-        print(f"[MTConnect] Saved agent URL to USD: {agent_address}")
+        try:
+            from pxr import Usd
+            
+            # Get or create the prim directly
+            prim = stage.GetPrimAtPath(settings_path)
+            if not prim.IsValid():
+                # Create the prim using direct USD API
+                prim = stage.DefinePrim(settings_path)
+                print(f"[MTConnect] Created prim at {settings_path}")
+            
+            if not prim or not prim.IsValid():
+                print(f"[MTConnect] ERROR: Could not create or get prim at {settings_path}")
+                return
+            
+            # Create or get the attribute
+            attr_name = "mtconnect:agentUrl"
+            if not prim.HasAttribute(attr_name):
+                attr = prim.CreateAttribute(attr_name, Sdf.ValueTypeNames.String, custom=True)
+                print(f"[MTConnect] Created attribute {attr_name}")
+            else:
+                attr = prim.GetAttribute(attr_name)
+            
+            # Set the value
+            attr.Set(agent_address)
+            print(f"[MTConnect] Set attribute value to: {agent_address}")
+            
+            # Verify it was saved
+            saved_value = attr.Get()
+            if saved_value == agent_address:
+                print(f"[MTConnect] ✓ Verified attribute value: {saved_value}")
+            else:
+                print(f"[MTConnect] WARNING: Verification failed. Set: {agent_address}, Got: {saved_value}")
+                
+        except Exception as e:
+            print(f"[MTConnect] ERROR saving agent URL to USD: {e}")
+            import traceback
+            traceback.print_exc()
 
     # -------------------------------------------------------------------------
     # Public API for external scripts and UI
