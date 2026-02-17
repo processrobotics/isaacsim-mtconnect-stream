@@ -528,7 +528,7 @@ class MTConnectClient:
             # Find boundary
             boundary_idx = buffer.find(boundary)
             if boundary_idx < 0:
-                carb.log_info(f"MTConnect: No boundary found in buffer (len={len(buffer)}), waiting for more data")
+                carb.log_verbose(f"MTConnect: No boundary found in buffer (len={len(buffer)}), waiting for more data")
                 return buffer
             
             # Find end of headers (double CRLF)
@@ -540,7 +540,7 @@ class MTConnectClient:
             # Parse headers to get Content-Length
             header_section = buffer[boundary_idx + len(boundary):header_end].decode('utf-8', errors='ignore')
             content_length = self._parse_content_length(header_section)
-            carb.log_info(f"MTConnect: Frame headers: {header_section[:200]}, Content-Length={content_length}")
+            carb.log_verbose(f"MTConnect: Frame headers: {header_section[:200]}, Content-Length={content_length}")
             
             if content_length is None:
                 # No Content-Length, try to find next boundary
@@ -674,7 +674,7 @@ class MTConnectClient:
         """Get a single observation from the cache by dataItemId."""
         result = self._data_cache.get(data_item_id)
         if result:
-            carb.log_info(f"MTConnect: get_observation('{data_item_id}') FOUND: {result.get('value')}")
+            carb.log_verbose(f"MTConnect: get_observation('{data_item_id}') FOUND: {result.get('value')}")
         else:
             available_keys = list(self._data_cache.keys())
             carb.log_warn(f"MTConnect: get_observation('{data_item_id}') NOT FOUND. Available keys ({len(available_keys)}): {available_keys[:10]}...")

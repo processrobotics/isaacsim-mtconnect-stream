@@ -157,16 +157,33 @@ class Extension(omni.ext.IExt):
     # Public API for external scripts and UI
     # -------------------------------------------------------------------------
     
-    def connect(self, agent_address: str) -> bool:
+    def reload_settings_from_usd(self):
+        """
+        Reload MTConnect settings from the current USD stage.
+        Call this after opening a new stage to load any saved agent settings.
+        """
+        self._load_settings_from_usd()
+    
+    def connect(self, agent_address: str = "") -> bool:
         """
         Connect to an MTConnect agent.
         
         Args:
             agent_address: The base URL of the MTConnect agent (e.g., "http://demo.mtconnect.org:5000")
+                          If empty, will attempt to use the saved agent URL from USD scene settings.
             
         Returns:
             True if connection successful, False otherwise
         """
+        # If no agent address provided, try to use saved URL from USD
+        if not agent_address:
+            if self._last_agent_url:
+                print(f"[MTConnect] Using saved agent URL from scene: {self._last_agent_url}")
+                agent_address = self._last_agent_url
+            else:
+                print("[MTConnect] ERROR: No agent address provided and no saved URL found in scene")
+                return False
+        
         result = self.mtconnect_client.connect(agent_address)
         if result:
             self._last_agent_url = agent_address

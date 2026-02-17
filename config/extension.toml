@@ -23,8 +23,13 @@ icon = "data/icon.png"
 
 # define the Python module that the extension provides
 [[python.module]]
-name = "isaacsim.mtconnect.stream2"
+name = "isaacsim.mtconnect.stream"
+
+# Watch the .ogn files for hot reloading
+[fswatcher.patterns]
+include = ["*.ogn", "*.py"]
+exclude = ["Ogn*Database.py"]
 
 [settings]
-exts."isaacsim.mtconnect.stream2".timeout = 5
+exts."isaacsim.mtconnect.stream".timeout = 5
 

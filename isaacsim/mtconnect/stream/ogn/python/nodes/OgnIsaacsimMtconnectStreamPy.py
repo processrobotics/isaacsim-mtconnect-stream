@@ -29,7 +29,7 @@ def _try_import_extension():
     
     try:
         # Try direct package import first
-        from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+        from isaacsim.mtconnect.stream.impl.extension import get_extension_instance
         _get_extension_instance = get_extension_instance
         carb.log_warn("MTConnect OmniGraph Node: Successfully imported get_extension_instance via package path")
         return True
@@ -37,7 +37,7 @@ def _try_import_extension():
         carb.log_warn(f"MTConnect OmniGraph Node: Package import failed: {e}")
         
     # Fallback: Add impl path to sys.path
-    # Path from nodes: ../python -> ../ogn -> ../stream2 -> /impl
+    # Path from nodes: ../python -> ../ogn -> ../stream -> /impl
     impl_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "impl"))
     if impl_path not in sys.path:
         sys.path.insert(0, impl_path)
@@ -106,7 +106,7 @@ def convert_to_numeric(value: Any) -> float:
     return 0.0
 
 
-class OgnIsaacsimMtconnectStream2PyInternalState:
+class OgnIsaacsimMtconnectStreamPyInternalState:
     """Convenience class for maintaining per-node state information"""
 
     def __init__(self):
@@ -115,13 +115,13 @@ class OgnIsaacsimMtconnectStream2PyInternalState:
         self.last_extension = None
 
 
-class OgnIsaacsimMtconnectStream2Py:
+class OgnIsaacsimMtconnectStreamPy:
     """The Ogn node class"""
 
     @staticmethod
     def internal_state():
         """Returns an object that contains per-node state information"""
-        return OgnIsaacsimMtconnectStream2PyInternalState()
+        return OgnIsaacsimMtconnectStreamPyInternalState()
 
     @staticmethod
     def compute(db) -> bool:
@@ -205,7 +205,7 @@ class OgnIsaacsimMtconnectStream2Py:
                     # String conversion
                     str_val = str(value) if value is not None else ""
                     
-                    carb.log_info(f"MTConnect OmniGraph Node: {data_item_id} = {numeric_value} (raw: {value}) @ {timestamp}")
+                    carb.log_verbose(f"MTConnect OmniGraph Node: {data_item_id} = {numeric_value} (raw: {value}) @ {timestamp}")
                     values.append(numeric_value)
                     timestamps.append(timestamp)
                     int_values.append(int_val)

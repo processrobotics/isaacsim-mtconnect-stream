@@ -6,12 +6,11 @@ An NVIDIA Isaac Sim extension that enables real-time streaming of MTConnect data
 
 ## Overview
 
-This extension provides comprehensive MTConnect integration for Isaac Sim through:
+This extension provides MTConnect integration for Isaac Sim through:
 
-- **MTConnect Client Library**: A robust Python client for connecting to MTConnect Agents with support for HTTP streaming
-- **Isaac Sim Extension**: A user-friendly UI for configuring and managing MTConnect data streams
-- **OmniGraph Node**: Integration with Isaac Sim's visual scripting system for data-driven automation
-- **Example Applications**: Standalone scripts demonstrating practical usage patterns
+- **MTConnect Client Library**: A boiler plate swagger python client generated from cppagent's openapi.json
+- **Isaac Sim Extension**: A simple user-friendly UI for connecting to and streaming data from an MTConnect Agent
+- **OmniGraph Node**: Integration with Isaac Sim's visual scripting system. Quickly connect your assets to MTConnect data via ActionGraphs
 
 ## Features
 
@@ -65,7 +64,7 @@ pip install git+https://github.com/processrobotics/mtconnect-rest-python.git
 2. Enable the extension in Isaac Sim:
    ```bash
    # Method 1: Using command line
-   ./isaac-sim.sh --ext-folder /path/to/isaacsim-mtconnect-stream --enable isaacsim.mtconnect.stream2
+   ./isaac-sim.sh --ext-folder /path/to/isaacsim-mtconnect-stream --enable isaacsim.mtconnect.stream
 
    # Method 2: Using Extension Manager in Isaac Sim UI
    # Window -> Extensions -> Add Extension Search Path -> Browse to extension folder
@@ -92,7 +91,7 @@ pip install git+https://github.com/processrobotics/mtconnect-rest-python.git
 ### Programmatic Example
 
 ```python
-from isaacsim.mtconnect.stream2.impl.mtconnect_client import MTConnectClient
+from isaacsim.mtconnect.stream.impl.mtconnect_client import MTConnectClient
 
 # Create client
 client = MTConnectClient()
@@ -119,7 +118,7 @@ if client.connect("http://localhost:5000"):
 
 ```
 isaacsim-mtconnect-stream/
-├── isaacsim/mtconnect/stream2/          # Extension package
+├── isaacsim/mtconnect/stream/          # Extension package
 │   ├── impl/                             # Core implementation
 │   │   ├── mtconnect_client.py          # MTConnect client library
 │   │   ├── extension.py                 # Extension initialization
@@ -127,8 +126,8 @@ isaacsim-mtconnect-stream/
 │   │   └── global_variables.py          # Configuration and client registry
 │   ├── ogn/                             # OmniGraph integration
 │   │   └── python/nodes/                # OmniGraph node definitions
-│   │       ├── OgnIsaacsimMtconnectStream2Py.py
-│   │       └── OgnIsaacsimMtconnectStream2Py.ogn
+│   │       ├── OgnIsaacsimMtconnectStreamPy.py
+│   │       └── OgnIsaacsimMtconnectStreamPy.ogn
 │   └── __init__.py
 ├── config/                               # Extension metadata
 │   └── extension.toml                   # Extension configuration
@@ -211,10 +210,10 @@ The recommended way to access MTConnect functionality is through the extension i
 
 ```python
 from isaacsim.core.utils.extensions import enable_extension
-from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+from isaacsim.mtconnect.stream.impl.extension import get_extension_instance
 
 # Enable the extension first
-enable_extension("isaacsim.mtconnect.stream2")
+enable_extension("isaacsim.mtconnect.stream")
 
 # Get the extension instance
 extension = get_extension_instance()
@@ -235,7 +234,7 @@ if extension.connect("http://192.168.0.247:5000"):
 You can also access the client directly for more control:
 
 ```python
-from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+from isaacsim.mtconnect.stream.impl.extension import get_extension_instance
 
 extension = get_extension_instance()
 client = extension.mtconnect_client
@@ -249,7 +248,7 @@ if client.connect("http://192.168.0.247:5000"):
 #### Streaming with Callbacks
 
 ```python
-from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+from isaacsim.mtconnect.stream.impl.extension import get_extension_instance
 
 extension = get_extension_instance()
 client = extension.mtconnect_client
@@ -285,7 +284,7 @@ extension.disconnect()
 #### Querying Cached Data
 
 ```python
-from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+from isaacsim.mtconnect.stream.impl.extension import get_extension_instance
 
 extension = get_extension_instance()
 client = extension.mtconnect_client
@@ -350,10 +349,13 @@ The extension includes an OmniGraph node for visual scripting integration:
 - Returns empty arrays if the client is not connected or data is unavailable
 
 ## Examples
+### Action Graph
+- **`mtc-cube-demo.usd`**: `mtc-cube-demo.usd` is a pre-built scene demonstrating the use of ActionGraphs to connect X/Y/Z position from the OKUMA device at demo.mtconnect.org tot he position of a cube
+- **`mtconnect_cube_demo.py`**: A convenient standalone python script that handles launching IsaacSim, loading `mtc-cube-demo.usd`, starting streaming from demo.mtconnect.org, and running the simulation
 
 ### Device Availability Monitor
 
-The included `mtconnect_device_monitor.py` script demonstrates:
+The included `mtconnect_device_monitor.py` script demonstrates a standalone IsaacSim script:
 - Connecting to an MTConnect Agent
 - Monitoring device availability
 - Visual feedback via colored cube (GREEN=AVAILABLE, RED=UNAVAILABLE)
@@ -395,10 +397,10 @@ simulation_app = SimulationApp({"headless": False})
 
 from isaacsim.core.api import World
 from isaacsim.core.utils.extensions import enable_extension
-from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+from isaacsim.mtconnect.stream.impl.extension import get_extension_instance
 
 # Enable the extension
-enable_extension("isaacsim.mtconnect.stream2")
+enable_extension("isaacsim.mtconnect.stream")
 
 # Create world
 world = World()
@@ -441,7 +443,7 @@ The extension provides a high-level API for MTConnect operations:
 Get the global extension instance.
 
 ```python
-from isaacsim.mtconnect.stream2.impl.extension import get_extension_instance
+from isaacsim.mtconnect.stream.impl.extension import get_extension_instance
 extension = get_extension_instance()
 ```
 
@@ -590,12 +592,12 @@ description = "Streams data from an MTConnect Agent"
 "omni.graph.tools" = {}
 
 [settings]
-exts."isaacsim.mtconnect.stream2".timeout = 5
+exts."isaacsim.mtconnect.stream".timeout = 5
 ```
 
 ### Default Agent Address
 
-Modify in `isaacsim/mtconnect/stream2/impl/global_variables.py`:
+Modify in `isaacsim/mtconnect/stream/impl/global_variables.py`:
 
 ```python
 DEFAULT_AGENT_ADDRESS = "http://localhost:5000"
