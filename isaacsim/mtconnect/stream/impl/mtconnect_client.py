@@ -187,12 +187,11 @@ class MTConnectClient:
             
             # Fetch /current to get initial state
             self._notify_status(f"Connecting to {self._agent_address}...")
-            
+            kwargs = {"_preload_content": False}
+            if self._path:
+                kwargs["path"] = self._path
             # Use _preload_content=False to get raw response, then parse JSON ourselves
-            if self._path != "":
-                response = self._api_instance.current_get_with_http_info(_preload_content=False, path=self._path)
-            else:
-                response = self._api_instance.current_get_with_http_info(_preload_content=False)
+            response = self._api_instance.current_get_with_http_info(**kwargs)
             http_response = response[0]
             
             # Read and parse JSON
@@ -430,24 +429,15 @@ class MTConnectClient:
                 from_seq = max(1, self._header.next_sequence or 1)
                 
                 carb.log_warn(f"MTConnect: Opening stream from sequence {from_seq}")
-                
-                if self._path != "":
-                    # Use sample_get_with_http_info with _preload_content=False to get raw streaming response
-                    # The interval parameter triggers multipart streaming mode
-                    response = self._api_instance.sample_get_with_http_info(
-                        _from=from_seq,
-                        interval=self._stream_interval_ms,
-                        heartbeat=self._stream_heartbeat_ms,
-                        path=self._path,
-                        _preload_content=False
-                    )
-                else:
-                    response = self._api_instance.sample_get_with_http_info(
-                        _from=from_seq,
-                        interval=self._stream_interval_ms,
-                        heartbeat=self._stream_heartbeat_ms,
-                        _preload_content=False
-                    )
+                kwargs = {
+                    "_from": from_seq,
+                    "interval": self._stream_interval_ms,
+                    "heartbeat": self._stream_heartbeat_ms,
+                    "_preload_content": False
+                }
+                if self._path:
+                    kwargs["path"] = self._path
+                response = self._api_instance.sample_get_with_http_info(**kwargs)
                 
                 http_response = response[0]
                 content_type = http_response.headers.get("Content-Type", "")
@@ -538,7 +528,6 @@ class MTConnectClient:
     
     def _process_multipart_buffer(self, buffer: bytes, boundary: bytes) -> bytes:
         """Process multipart frames from buffer, return remaining unprocessed bytes."""
-        frames_processed = 0
         while True:
             # Find boundary
             boundary_idx = buffer.find(boundary)
