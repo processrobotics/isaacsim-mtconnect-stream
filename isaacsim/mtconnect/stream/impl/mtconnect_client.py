@@ -90,6 +90,7 @@ class MTConnectClient:
     
     def __init__(self):
         self._agent_address: str = ""
+        self._path: str = ""
         self._api_instance: Optional["mtconnect.DefaultApi"] = None
         self._api_client: Optional["mtconnect.ApiClient"] = None
         self._streaming: bool = False
@@ -156,12 +157,13 @@ class MTConnectClient:
         if self._on_data_update:
             self._on_data_update(self._data_cache)
     
-    def connect(self, agent_address: str) -> bool:
+    def connect(self, agent_address: str, xpath: str = "") -> bool:
         """
         Connect to an MTConnect agent and fetch initial /current data.
         
         Args:
             agent_address: The base URL of the MTConnect agent (e.g., "http://192.168.0.247:5000")
+            xpath: Optional XPath query to filter the data items from the agent.
             
         Returns:
             True if connection successful, False otherwise
@@ -171,6 +173,7 @@ class MTConnectClient:
             return False
             
         self._agent_address = agent_address.rstrip("/")
+        self._path = xpath
         
         try:
             # Configure the API client
@@ -186,7 +189,10 @@ class MTConnectClient:
             self._notify_status(f"Connecting to {self._agent_address}...")
             
             # Use _preload_content=False to get raw response, then parse JSON ourselves
-            response = self._api_instance.current_get_with_http_info(_preload_content=False)
+            if self._path != "":
+                response = self._api_instance.current_get_with_http_info(_preload_content=False, path=self._path)
+            else:
+                response = self._api_instance.current_get_with_http_info(_preload_content=False)
             http_response = response[0]
             
             # Read and parse JSON
@@ -425,14 +431,23 @@ class MTConnectClient:
                 
                 carb.log_warn(f"MTConnect: Opening stream from sequence {from_seq}")
                 
-                # Use sample_get_with_http_info with _preload_content=False to get raw streaming response
-                # The interval parameter triggers multipart streaming mode
-                response = self._api_instance.sample_get_with_http_info(
-                    _from=from_seq,
-                    interval=self._stream_interval_ms,
-                    heartbeat=self._stream_heartbeat_ms,
-                    _preload_content=False
-                )
+                if self._path != "":
+                    # Use sample_get_with_http_info with _preload_content=False to get raw streaming response
+                    # The interval parameter triggers multipart streaming mode
+                    response = self._api_instance.sample_get_with_http_info(
+                        _from=from_seq,
+                        interval=self._stream_interval_ms,
+                        heartbeat=self._stream_heartbeat_ms,
+                        path=self._path,
+                        _preload_content=False
+                    )
+                else:
+                    response = self._api_instance.sample_get_with_http_info(
+                        _from=from_seq,
+                        interval=self._stream_interval_ms,
+                        heartbeat=self._stream_heartbeat_ms,
+                        _preload_content=False
+                    )
                 
                 http_response = response[0]
                 content_type = http_response.headers.get("Content-Type", "")

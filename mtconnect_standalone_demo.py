@@ -87,14 +87,8 @@ class MTConnectDeviceMonitor:
         if not self.cube_obj:
             return
         
-        import numpy as np
         position = np.array([x, y, z])
         self.cube_obj.set_world_pose(position=position)
-    
-    def set_target_position(self, x: float, y: float, z: float):
-        """Set the target position for smooth interpolation."""
-        import numpy as np
-        self.target_position = np.array([x, y, z], dtype=float)
     
     def update_cube_from_mtconnect(self):
         """Update cube position based on MTConnect device position data."""
@@ -123,7 +117,7 @@ class MTConnectDeviceMonitor:
             
             # Update target if position has changed
             if current_position != self.last_position:
-                self.set_target_position(x, y, z)
+                self.target_position = np.array([x, y, z], dtype=float)
                 self.last_position = current_position
                 return True
         except (ValueError, TypeError, IndexError) as e:
@@ -134,8 +128,6 @@ class MTConnectDeviceMonitor:
     
     def physics_callback(self, *args):
         """Physics callback for world.add_physics_callback."""
-        import numpy as np
-        
         # Update target from MTConnect
         self.update_cube_from_mtconnect()
         

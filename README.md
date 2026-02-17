@@ -350,41 +350,48 @@ The extension includes an OmniGraph node for visual scripting integration:
 
 ## Examples
 ### Action Graph
-- **`mtc-cube-demo.usd`**: `mtc-cube-demo.usd` is a pre-built scene demonstrating the use of ActionGraphs to connect X/Y/Z position from the OKUMA device at demo.mtconnect.org tot he position of a cube
-- **`mtconnect_cube_demo.py`**: A convenient standalone python script that handles launching IsaacSim, loading `mtc-cube-demo.usd`, starting streaming from demo.mtconnect.org, and running the simulation
+Omnigraph nodes are demonstrated in a static USD file and provided minimal standalone script to launch the actiongraph demo USD.
+- **`mtc_cube_demo.usd`**: a pre-built scene demonstrating the use of ActionGraphs to connect X/Y/Z position from the OKUMA device at demo.mtconnect.org tot he position of a cube
+- **`mtconnect_cube_demo.py`**: A convenient standalone python script that handles launching IsaacSim, loading `mtc_cube_demo.usd`, starting streaming from demo.mtconnect.org, and running the simulation
 
-### Device Availability Monitor
+### Device Position Monitor
 
-The included `mtconnect_device_monitor.py` script demonstrates a standalone IsaacSim script:
+The included `mtconnect_standalone_demo.py` script demonstrates a standalone IsaacSim script:
 - Connecting to an MTConnect Agent
-- Monitoring device availability
-- Visual feedback via colored cube (GREEN=AVAILABLE, RED=UNAVAILABLE)
+- Monitoring device position data
+- Visual feedback via cube that moves with the device's 3D position
 
 **To run**:
 ```bash
 # From Isaac Sim Python environment
-python mtconnect_device_monitor.py
+python mtconnect_standalone_demo.py
 ```
 
 **What it does**:
-1. Creates an Isaac Sim world with a cube
-2. Connects to MTConnect Agent at `192.168.0.247:5000`
-3. Monitors the `mxi_m001_avail` dataItem
-4. Changes cube color based on device state
-5. Updates every physics step
+1. Creates an Isaac Sim world with a red cube
+2. Connects to MTConnect Agent at `demo.mtconnect.org/OKUMA`
+3. Monitors the `Lp1LPathPos` dataItem (3D position)
+4. Updates cube position based on device X/Y/Z coordinates
+5. Smoothly interpolates cube movement using LERP
+6. Scales position values from millimeters to meters
 
 **Key Code**:
 ```python
 class MTConnectDeviceMonitor:
-    DATAITEM_ID = "mxi_m001_avail"
+    DATAITEM_POSITION = "Lp1LPathPos"
+    AGENT_ADDRESS = "demo.mtconnect.org/OKUMA"
+    POSITION_SCALE = 0.001  # Scale MTConnect values (mm) to Isaac Sim (m)
+    LERP_SPEED = 0.1  # Interpolation speed
     
     def update_cube_from_mtconnect(self):
-        obs = self.mtconnect_client.get_observation(self.DATAITEM_ID)
+        obs = self.extension.mtconnect_client.get_observation(self.DATAITEM_POSITION)
         if obs:
-            if obs.get("value") == "AVAILABLE":
-                self.set_cube_color(self.GREEN)
-            elif obs.get("value") == "UNAVAILABLE":
-                self.set_cube_color(self.RED)
+            position_list = obs.get("value", [])
+            if position_list and len(position_list) == 3:
+                x = float(position_list[0]) * self.POSITION_SCALE
+                y = float(position_list[1]) * self.POSITION_SCALE
+                z = (float(position_list[2]) * self.POSITION_SCALE) + 0.5
+                self.target_position = np.array([x, y, z])
 ```
 
 ### Custom Integration Example

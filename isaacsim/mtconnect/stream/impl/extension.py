@@ -164,13 +164,14 @@ class Extension(omni.ext.IExt):
         """
         self._load_settings_from_usd()
     
-    def connect(self, agent_address: str = "") -> bool:
+    def connect(self, agent_address: str = "", xpath: str = "") -> bool:
         """
         Connect to an MTConnect agent.
         
         Args:
             agent_address: The base URL of the MTConnect agent (e.g., "http://demo.mtconnect.org:5000")
                           If empty, will attempt to use the saved agent URL from USD scene settings.
+            xpath: Optional XPath query to filter the data items from the agent.
             
         Returns:
             True if connection successful, False otherwise
@@ -184,7 +185,7 @@ class Extension(omni.ext.IExt):
                 print("[MTConnect] ERROR: No agent address provided and no saved URL found in scene")
                 return False
         
-        result = self.mtconnect_client.connect(agent_address)
+        result = self.mtconnect_client.connect(agent_address, xpath)
         if result:
             self._last_agent_url = agent_address
             self._save_agent_url_to_usd(agent_address)
